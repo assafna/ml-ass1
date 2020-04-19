@@ -4,8 +4,9 @@ import numpy as np
 import pandas as pd
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_squared_error
+from tqdm import tqdm
 
-MIN_OBS_TO_SPLIT = 5
+MIN_OBS_TO_SPLIT = 10
 
 
 def read_and_process_data(_file):
@@ -16,22 +17,32 @@ def read_and_process_data(_file):
     _data = _data.dropna()
 
     # replace nominal with new columns
-    _x, _y = pd.get_dummies(_data.iloc[:, :-1]), _data.iloc[:, -1]
-    _x, _y = pd.DataFrame(_x.values), pd.DataFrame(_y.values)
+    _x, _y = _data.iloc[:, :-1], _data.iloc[:, -1]
 
     return _x, _y
 
 
+def is_number(_i):
+    try:
+        float(_i)
+        return True
+    except ValueError:
+        return False
+
+
 class Node:
-    def __init__(self, _x, _y):
+    def __init__(self, _x, _y, _root=False):
+        self.root = _root
+
         # compute current mse
         self.linear_model = LinearRegression()
-        self.linear_model.fit(_x, _y)
-        self.mse = mean_squared_error(_y, self.linear_model.predict(_x))
+        self.linear_model.fit(pd.get_dummies(_x), _y)
+        self.mse = mean_squared_error(_y, self.linear_model.predict(pd.get_dummies(_x)))
 
         self.criterion_mse = float('inf')
         self.criterion_column_index = None
         self.criterion_column_value = None
+        self.criterion_numeric = None
         self.children = None
 
         # recursive tree creator
@@ -40,49 +51,87 @@ class Node:
 
     def find_best_split(self, _x, _y):
         # for each column
-        for _column_index in range(_x.shape[1]):
+        for _column_index in tqdm(range(_x.shape[1]), disable=not self.root, desc='Creating tree'):
             _column_values = _x[_column_index]
-            # for each value in column
-            for _column_value in pd.unique(_column_values):
-                _x_lower_equal, _y_lower_equal = \
-                    _x[_column_values <= _column_value], _y[_column_values <= _column_value]
-                _x_greater_than, _y_greater_than = \
-                    _x[_column_values > _column_value], _y[_column_values > _column_value]
 
-                # dead end
-                if _x_lower_equal.empty or _x_greater_than.empty:
-                    continue
+            # check if numeric
+            if is_number(list(_column_values)[0]):
+                # for each value in column
+                for _column_value in pd.unique(_column_values):
+                    _x_lower_equal, _y_lower_equal = \
+                        _x[_column_values <= _column_value], _y[_column_values <= _column_value]
+                    _x_greater_than, _y_greater_than = \
+                        _x[_column_values > _column_value], _y[_column_values > _column_value]
 
-                _x_lower_equal_linear_model = LinearRegression()
-                _x_lower_equal_linear_model.fit(_x_lower_equal, _y_lower_equal)
-                _y_predict_lower_equal = _x_lower_equal_linear_model.predict(_x_lower_equal)
-                _x_lower_equal_mse = mean_squared_error(_y_lower_equal, _y_predict_lower_equal)
+                    # dead end
+                    if _x_lower_equal.empty or _x_greater_than.empty:
+                        continue
 
-                _x_greater_than_linear_model = LinearRegression()
-                _x_greater_than_linear_model.fit(_x_greater_than, _y_greater_than)
-                _y_predict_greater_than = _x_greater_than_linear_model.predict(_x_greater_than)
-                _x_greater_than_mse = mean_squared_error(_y_greater_than, _y_predict_greater_than)
+                    _x_lower_equal_linear_model = LinearRegression()
+                    _x_lower_equal_linear_model.fit(pd.get_dummies(_x_lower_equal), _y_lower_equal)
+                    _y_predict_lower_equal = \
+                        _x_lower_equal_linear_model.predict(pd.get_dummies(_x_lower_equal))
+                    _x_lower_equal_mse = mean_squared_error(_y_lower_equal, _y_predict_lower_equal)
 
-                _normalized_mse = (_x_lower_equal_mse * _x_lower_equal.shape[0] +
-                                   _x_greater_than_mse * _x_greater_than.shape[0]) / _x.shape[0]
+                    _x_greater_than_linear_model = LinearRegression()
+                    _x_greater_than_linear_model.fit(pd.get_dummies(_x_greater_than), _y_greater_than)
+                    _y_predict_greater_than = \
+                        _x_greater_than_linear_model.predict(pd.get_dummies(_x_greater_than))
+                    _x_greater_than_mse = mean_squared_error(_y_greater_than, _y_predict_greater_than)
+
+                    _normalized_mse = (_x_lower_equal_mse * _x_lower_equal.shape[0] +
+                                       _x_greater_than_mse * _x_greater_than.shape[0]) / _x.shape[0]
+
+                    # found better split
+                    if _normalized_mse < self.criterion_mse:
+                        self.criterion_mse = _normalized_mse
+                        self.criterion_column_index = _column_index
+                        self.criterion_column_value = _column_value
+                        self.criterion_numeric = True
+
+            # not numeric
+            else:
+                # for each value in column
+                _normalized_mse = 0
+                for _column_value in pd.unique(_column_values):
+                    _x_equal, _y_equal = _x[_column_values == _column_value], _y[_column_values == _column_value]
+
+                    # dead end
+                    if _x_equal.empty:
+                        continue
+
+                    _x_equal_linear_model = LinearRegression()
+                    _x_equal_linear_model.fit(pd.get_dummies(_x_equal), _y_equal)
+                    _y_predict_equal = _x_equal_linear_model.predict(pd.get_dummies(_x_equal))
+                    _x_equal_mse = mean_squared_error(_y_equal, _y_predict_equal)
+
+                    _normalized_mse += _x_equal_mse * _x_equal.shape[0]
+
+                _normalized_mse = _normalized_mse / _x.shape[0]
 
                 # found better split
                 if _normalized_mse < self.criterion_mse:
                     self.criterion_mse = _normalized_mse
                     self.criterion_column_index = _column_index
-                    self.criterion_column_value = _column_value
+                    self.criterion_numeric = False
 
         # make children
         if self.criterion_column_index is not None:
             _column_values = _x[self.criterion_column_index]
-            _x_lower_equal, _y_lower_equal = \
-                _x[_column_values <= self.criterion_column_value], _y[_column_values <= self.criterion_column_value]
-            _x_greater_than, _y_greater_than = \
-                _x[_column_values > self.criterion_column_value], _y[_column_values > self.criterion_column_value]
-            self.children = [
-                Node(_x_lower_equal, _y_lower_equal),
-                Node(_x_greater_than, _y_greater_than)
-            ]
+            if self.criterion_numeric:
+                _x_lower_equal, _y_lower_equal = \
+                    _x[_column_values <= self.criterion_column_value], _y[_column_values <= self.criterion_column_value]
+                _x_greater_than, _y_greater_than = \
+                    _x[_column_values > self.criterion_column_value], _y[_column_values > self.criterion_column_value]
+                self.children = [
+                    Node(_x_lower_equal, _y_lower_equal),
+                    Node(_x_greater_than, _y_greater_than)
+                ]
+            else:
+                self.children = {}
+                for _column_value in pd.unique(_column_values):
+                    _x_equal, _y_equal = _x[_column_values == _column_value], _y[_column_values == _column_value]
+                    self.children[_column_value] = Node(_x_equal, _y_equal)
 
     def predict(self, _x):
         # batch predictions
@@ -90,15 +139,23 @@ class Node:
         if self.criterion_column_index is not None:
             # move to children
             _column_values = _x[self.criterion_column_index]
-            _x_lower_equal, _x_greater_than = \
-                _x[_column_values <= self.criterion_column_value], _x[_column_values > self.criterion_column_value]
-            _y_predict_lower_equal, _y_predict_greater_than = \
-                self.children[0].predict(_x_lower_equal), self.children[1].predict(_x_greater_than)
-            _y_predict[_column_values <= self.criterion_column_value] = _y_predict_lower_equal.flatten()
-            _y_predict[_column_values > self.criterion_column_value] = _y_predict_greater_than.flatten()
+            # numeric
+            if self.criterion_numeric:
+                _x_lower_equal, _x_greater_than = \
+                    _x[_column_values <= self.criterion_column_value], _x[_column_values > self.criterion_column_value]
+                _y_predict_lower_equal, _y_predict_greater_than = \
+                    self.children[0].predict(_x_lower_equal), self.children[1].predict(_x_greater_than)
+                _y_predict[_column_values <= self.criterion_column_value] = _y_predict_lower_equal.flatten()
+                _y_predict[_column_values > self.criterion_column_value] = _y_predict_greater_than.flatten()
+            # not numeric
+            else:
+                for _column_value in pd.unique(_column_values):
+                    _x_equal = _x[_column_values == _column_value]
+                    _y_predict_equal = self.children[_column_value].predict(_x_equal)
+                    _y_predict[_column_values == _column_value] = _y_predict_equal.flatten()
         else:
             # no children, return current
-            return self.linear_model.predict(_x)
+            return self.linear_model.predict(pd.get_dummies(_x))
 
         return _y_predict
 
@@ -109,7 +166,7 @@ class DecisionRegressionTree:
 
     # creates tree based on data
     def fit(self, _x, _y):
-        self.root = Node(_x, _y)
+        self.root = Node(_x, _y, _root=True)
 
     def predict(self, _x):
         return self.root.predict(_x)
