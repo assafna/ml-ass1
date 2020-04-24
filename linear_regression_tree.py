@@ -1,3 +1,4 @@
+import os
 import time
 
 import numpy as np
@@ -215,32 +216,34 @@ class LinearRegressionTree:
 
 
 def main():
-    _x, _y = read_and_process_data('forestfires.csv')
-    _x_train, _x_test, _y_train, _y_test = train_test_split(_x, _y, test_size=0.2)
+    for _data_file in os.listdir('data'):
+        print('Data:', _data_file)
+        _x, _y = read_and_process_data(os.path.join('data', _data_file))
+        _x_train, _x_test, _y_train, _y_test = train_test_split(_x, _y, test_size=0.2)
 
-    print('Our model:')
-    _start_time = time.time()
-    _linear_regression_tree = LinearRegressionTree()
-    _linear_regression_tree.fit(_x_train, _y_train)
-    print('Training time:', time.time() - _start_time)
+        print('Our model:')
+        _start_time = time.time()
+        _linear_regression_tree = LinearRegressionTree()
+        _linear_regression_tree.fit(_x_train, _y_train)
+        print('Training time:', time.time() - _start_time)
 
-    _y_train_predict = _linear_regression_tree.predict(_x_train)
-    print('Train set MSE:', mean_squared_error(_y_train, _y_train_predict))
-    _y_test_predict = _linear_regression_tree.predict(_x_test)
-    print('Test set MSE:', mean_squared_error(_y_test, _y_test_predict))
+        _y_train_predict = _linear_regression_tree.predict(_x_train)
+        print('Train set MSE:', mean_squared_error(_y_train, _y_train_predict))
+        _y_test_predict = _linear_regression_tree.predict(_x_test)
+        print('Test set MSE:', mean_squared_error(_y_test, _y_test_predict))
 
-    print('scikit-learn model:')
-    _start_time = time.time()
-    _decision_regression_tree = DecisionTreeRegressor(min_samples_split=MIN_SAMPLES_TO_SPLIT)
-    _decision_regression_tree.fit(pd.get_dummies(_x_train, prefix='dummy'), _y_train)
-    print('Training time:', time.time() - _start_time)
+        print('scikit-learn model:')
+        _start_time = time.time()
+        _decision_regression_tree = DecisionTreeRegressor(min_samples_split=MIN_SAMPLES_TO_SPLIT)
+        _decision_regression_tree.fit(pd.get_dummies(_x_train, prefix='dummy'), _y_train)
+        print('Training time:', time.time() - _start_time)
 
-    _y_train_predict = _decision_regression_tree.predict(pd.get_dummies(_x_train, prefix='dummy'))
-    print('Train set MSE:', mean_squared_error(_y_train, _y_train_predict))
-    _x_train_columns = list(pd.get_dummies(_x_train, prefix='dummy').columns)
-    _x_test_new = pd.DataFrame(data=pd.get_dummies(_x_test, prefix='dummy'), columns=_x_train_columns).fillna(0)
-    _y_test_predict = _decision_regression_tree.predict(_x_test_new)
-    print('Test set MSE:', mean_squared_error(_y_test, _y_test_predict))
+        _y_train_predict = _decision_regression_tree.predict(pd.get_dummies(_x_train, prefix='dummy'))
+        print('Train set MSE:', mean_squared_error(_y_train, _y_train_predict))
+        _x_train_columns = list(pd.get_dummies(_x_train, prefix='dummy').columns)
+        _x_test_new = pd.DataFrame(data=pd.get_dummies(_x_test, prefix='dummy'), columns=_x_train_columns).fillna(0)
+        _y_test_predict = _decision_regression_tree.predict(_x_test_new)
+        print('Test set MSE:', mean_squared_error(_y_test, _y_test_predict))
 
 
 if __name__ == '__main__':
