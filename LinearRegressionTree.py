@@ -18,8 +18,21 @@ def read_and_process_data(_file):
     _data = _data.replace('?', np.nan)
     _data = _data.dropna()
 
-    # replace nominal with new columns
+    # split to x and y
     _x, _y = _data.iloc[:, :-1], _data.iloc[:, -1]
+
+    # add prefix to each nominal column to avoid duplicated columns
+    for _column_index in range(_x.shape[1]):
+        _column_values = _x[_column_index]
+        _nominal = False
+        for _column_value in pd.unique(_column_values):
+            if not is_number(_column_value):
+                _nominal = True
+                break
+        if _nominal:
+            _x[_column_index] = str(_column_index) + '_' + _x[_column_index].astype(str)
+        else:
+            _x[_column_index] = _x[_column_index].astype(float)
 
     return _x, _y
 
@@ -35,12 +48,14 @@ def is_number(_i):
 class Node:
     def __init__(self, _x, _y, _depth=0):
         self.depth = _depth
-        self.x_columns = list(pd.get_dummies(_x, prefix='dummy').columns)
+
+        _x_dummies = pd.get_dummies(_x, prefix='dummy')
+        self.x_columns = _x_dummies.columns
 
         # compute current mse
         self.linear_model = LinearRegression()
-        self.linear_model.fit(pd.get_dummies(_x, prefix='dummy'), _y)
-        self.mse = mean_squared_error(_y, self.linear_model.predict(pd.get_dummies(_x, prefix='dummy')))
+        self.linear_model.fit(_x_dummies, _y)
+        self.mse = mean_squared_error(_y, self.linear_model.predict(_x_dummies))
 
         self.criterion_mse = float('inf')
         self.criterion_column_index = None
@@ -147,10 +162,12 @@ class Node:
             if self.criterion_numeric:
                 _x_lower_equal, _x_greater_than = \
                     _x[_column_values <= self.criterion_column_value], _x[_column_values > self.criterion_column_value]
-                _y_predict_lower_equal, _y_predict_greater_than = \
-                    self.children[0].predict(_x_lower_equal), self.children[1].predict(_x_greater_than)
-                _y_predict[_column_values <= self.criterion_column_value] = _y_predict_lower_equal.flatten()
-                _y_predict[_column_values > self.criterion_column_value] = _y_predict_greater_than.flatten()
+                if len(_x_lower_equal) > 0:
+                    _y_predict_lower_equal = self.children[0].predict(_x_lower_equal)
+                    _y_predict[_column_values <= self.criterion_column_value] = _y_predict_lower_equal.flatten()
+                if len(_x_greater_than) > 0:
+                    _y_predict_greater_than = self.children[1].predict(_x_greater_than)
+                    _y_predict[_column_values > self.criterion_column_value] = _y_predict_greater_than.flatten()
             # not numeric
             else:
                 for _column_value in pd.unique(_column_values):
@@ -169,7 +186,8 @@ class Node:
                         _y_predict[_column_values == _column_value] = _y_predict_equal.flatten()
         else:
             # no children, return current
-            return self.linear_model.predict(pd.get_dummies(_x, prefix='dummy'))
+            _x_new = pd.DataFrame(data=pd.get_dummies(_x, prefix='dummy'), columns=self.x_columns).fillna(0)
+            return self.linear_model.predict(pd.get_dummies(_x_new, prefix='dummy'))
 
         return _y_predict
 
@@ -187,7 +205,7 @@ class LinearRegressionTree:
 
 
 def main():
-    _x, _y = read_and_process_data('machine.data')
+    _x, _y = read_and_process_data('imports-85.data')
     _x_train, _x_test, _y_train, _y_test = train_test_split(_x, _y, test_size=0.2)
 
     print('Our model:')
