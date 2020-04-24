@@ -142,6 +142,11 @@ class Node:
                     _x[_column_values <= self.criterion_column_value], _y[_column_values <= self.criterion_column_value]
                 _x_greater_than, _y_greater_than = \
                     _x[_column_values > self.criterion_column_value], _y[_column_values > self.criterion_column_value]
+
+                # stop loop
+                if len(_x_lower_equal) == len(_x) or len(_x_greater_than) == len(_x):
+                    return
+
                 self.children = [
                     Node(_x_lower_equal, _y_lower_equal, _depth=self.depth + 1),
                     Node(_x_greater_than, _y_greater_than, _depth=self.depth + 1)
@@ -150,6 +155,11 @@ class Node:
                 self.children = {}
                 for _column_value in pd.unique(_column_values):
                     _x_equal, _y_equal = _x[_column_values == _column_value], _y[_column_values == _column_value]
+
+                    # stop loop
+                    if len(_x_equal) == len(_x):
+                        return
+
                     self.children[_column_value] = Node(_x_equal, _y_equal, _depth=self.depth + 1)
 
     def predict(self, _x):
@@ -205,7 +215,7 @@ class LinearRegressionTree:
 
 
 def main():
-    _x, _y = read_and_process_data('imports-85.data')
+    _x, _y = read_and_process_data('forestfires.csv')
     _x_train, _x_test, _y_train, _y_test = train_test_split(_x, _y, test_size=0.2)
 
     print('Our model:')
