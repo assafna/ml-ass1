@@ -34,11 +34,12 @@ def is_number(_i):
 class Node:
     def __init__(self, _x, _y, _depth=0):
         self.depth = _depth
+        self.x_columns = list(pd.get_dummies(_x, prefix='dummy').columns)
 
         # compute current mse
         self.linear_model = LinearRegression()
-        self.linear_model.fit(pd.get_dummies(_x), _y)
-        self.mse = mean_squared_error(_y, self.linear_model.predict(pd.get_dummies(_x)))
+        self.linear_model.fit(pd.get_dummies(_x, prefix='dummy'), _y)
+        self.mse = mean_squared_error(_y, self.linear_model.predict(pd.get_dummies(_x, prefix='dummy')))
 
         self.criterion_mse = float('inf')
         self.criterion_column_index = None
@@ -70,15 +71,15 @@ class Node:
                         continue
 
                     _x_lower_equal_linear_model = LinearRegression()
-                    _x_lower_equal_linear_model.fit(pd.get_dummies(_x_lower_equal), _y_lower_equal)
+                    _x_lower_equal_linear_model.fit(pd.get_dummies(_x_lower_equal, prefix='dummy'), _y_lower_equal)
                     _y_predict_lower_equal = \
-                        _x_lower_equal_linear_model.predict(pd.get_dummies(_x_lower_equal))
+                        _x_lower_equal_linear_model.predict(pd.get_dummies(_x_lower_equal, prefix='dummy'))
                     _x_lower_equal_mse = mean_squared_error(_y_lower_equal, _y_predict_lower_equal)
 
                     _x_greater_than_linear_model = LinearRegression()
-                    _x_greater_than_linear_model.fit(pd.get_dummies(_x_greater_than), _y_greater_than)
+                    _x_greater_than_linear_model.fit(pd.get_dummies(_x_greater_than, prefix='dummy'), _y_greater_than)
                     _y_predict_greater_than = \
-                        _x_greater_than_linear_model.predict(pd.get_dummies(_x_greater_than))
+                        _x_greater_than_linear_model.predict(pd.get_dummies(_x_greater_than, prefix='dummy'))
                     _x_greater_than_mse = mean_squared_error(_y_greater_than, _y_predict_greater_than)
 
                     _normalized_mse = (_x_lower_equal_mse * _x_lower_equal.shape[0] +
@@ -103,8 +104,8 @@ class Node:
                         continue
 
                     _x_equal_linear_model = LinearRegression()
-                    _x_equal_linear_model.fit(pd.get_dummies(_x_equal), _y_equal)
-                    _y_predict_equal = _x_equal_linear_model.predict(pd.get_dummies(_x_equal))
+                    _x_equal_linear_model.fit(pd.get_dummies(_x_equal, prefix='dummy'), _y_equal)
+                    _y_predict_equal = _x_equal_linear_model.predict(pd.get_dummies(_x_equal, prefix='dummy'))
                     _x_equal_mse = mean_squared_error(_y_equal, _y_predict_equal)
 
                     _normalized_mse += _x_equal_mse * _x_equal.shape[0]
@@ -153,11 +154,21 @@ class Node:
             else:
                 for _column_value in pd.unique(_column_values):
                     _x_equal = _x[_column_values == _column_value]
-                    _y_predict_equal = self.children[_column_value].predict(_x_equal)
-                    _y_predict[_column_values == _column_value] = _y_predict_equal.flatten()
+
+                    # value does not exist, prepare x and return current
+                    if _column_value not in self.children:
+                        _x_equal_new = pd.DataFrame(
+                            data=pd.get_dummies(_x_equal, prefix='dummy'),
+                            columns=self.x_columns).fillna(0)
+                        _y_predict[_column_values == _column_value] = \
+                            self.linear_model.predict(pd.get_dummies(_x_equal_new, prefix='dummy'))
+                    # value exists, move to children
+                    else:
+                        _y_predict_equal = self.children[_column_value].predict(_x_equal)
+                        _y_predict[_column_values == _column_value] = _y_predict_equal.flatten()
         else:
             # no children, return current
-            return self.linear_model.predict(pd.get_dummies(_x))
+            return self.linear_model.predict(pd.get_dummies(_x, prefix='dummy'))
 
         return _y_predict
 
@@ -176,7 +187,7 @@ class DecisionRegressionTree:
 
 def main():
     _start_time = time.time()
-    _x, _y = read_and_process_data('imports-85.data')
+    _x, _y = read_and_process_data('machine.data')
     _x_train, _x_test, _y_train, _y_test = train_test_split(_x, _y, test_size=0.2)
     _decision_regression_tree = DecisionRegressionTree()
     _decision_regression_tree.fit(_x_train, _y_train)
