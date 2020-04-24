@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_squared_error
+from sklearn.model_selection import train_test_split
 from tqdm import tqdm
 
 MIN_OBS_TO_SPLIT = 10
@@ -31,8 +32,8 @@ def is_number(_i):
 
 
 class Node:
-    def __init__(self, _x, _y, _root=False):
-        self.root = _root
+    def __init__(self, _x, _y, _depth=0):
+        self.depth = _depth
 
         # compute current mse
         self.linear_model = LinearRegression()
@@ -51,7 +52,8 @@ class Node:
 
     def find_best_split(self, _x, _y):
         # for each column
-        for _column_index in tqdm(range(_x.shape[1]), disable=not self.root, desc='Creating tree'):
+        for _column_index in \
+                tqdm(range(_x.shape[1]), desc='Depth: ' + str(self.depth) + ', # of rows: ' + str(_x.shape[0])):
             _column_values = _x[_column_index]
 
             # check if numeric
@@ -124,14 +126,14 @@ class Node:
                 _x_greater_than, _y_greater_than = \
                     _x[_column_values > self.criterion_column_value], _y[_column_values > self.criterion_column_value]
                 self.children = [
-                    Node(_x_lower_equal, _y_lower_equal),
-                    Node(_x_greater_than, _y_greater_than)
+                    Node(_x_lower_equal, _y_lower_equal, _depth=self.depth + 1),
+                    Node(_x_greater_than, _y_greater_than, _depth=self.depth + 1)
                 ]
             else:
                 self.children = {}
                 for _column_value in pd.unique(_column_values):
                     _x_equal, _y_equal = _x[_column_values == _column_value], _y[_column_values == _column_value]
-                    self.children[_column_value] = Node(_x_equal, _y_equal)
+                    self.children[_column_value] = Node(_x_equal, _y_equal, _depth=self.depth + 1)
 
     def predict(self, _x):
         # batch predictions
@@ -166,7 +168,7 @@ class DecisionRegressionTree:
 
     # creates tree based on data
     def fit(self, _x, _y):
-        self.root = Node(_x, _y, _root=True)
+        self.root = Node(_x, _y)
 
     def predict(self, _x):
         return self.root.predict(_x)
@@ -174,12 +176,16 @@ class DecisionRegressionTree:
 
 def main():
     _start_time = time.time()
-    _x, _y = read_and_process_data('machine.data')
+    _x, _y = read_and_process_data('imports-85.data')
+    _x_train, _x_test, _y_train, _y_test = train_test_split(_x, _y, test_size=0.2)
     _decision_regression_tree = DecisionRegressionTree()
-    _decision_regression_tree.fit(_x, _y)
+    _decision_regression_tree.fit(_x_train, _y_train)
     print('Training time:', time.time() - _start_time)
-    _y_predict = _decision_regression_tree.predict(_x)
-    print('MSE:', mean_squared_error(_y, _y_predict), 'Total time:', time.time() - _start_time)
+
+    _y_train_predict = _decision_regression_tree.predict(_x_train)
+    print('Train set MSE:', mean_squared_error(_y_train, _y_train_predict))
+    _y_test_predict = _decision_regression_tree.predict(_x_test)
+    print('Test set MSE:', mean_squared_error(_y_test, _y_test_predict))
 
 
 if __name__ == '__main__':
