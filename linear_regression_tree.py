@@ -10,6 +10,7 @@ from sklearn.tree import DecisionTreeRegressor
 from tqdm import tqdm
 
 MIN_SAMPLES_TO_SPLIT = 10
+MAX_DEPTH = 5
 
 
 def read_and_process_data(_file):
@@ -65,7 +66,7 @@ class Node:
         self.children = None
 
         # recursive tree creator
-        if MIN_SAMPLES_TO_SPLIT <= _x.shape[0]:
+        if MIN_SAMPLES_TO_SPLIT <= _x.shape[0] and _depth <= MAX_DEPTH:
             self.find_best_split(_x, _y)
 
     def find_best_split(self, _x, _y):
@@ -234,7 +235,7 @@ def main():
 
         print('scikit-learn model:')
         _start_time = time.time()
-        _decision_regression_tree = DecisionTreeRegressor(min_samples_split=MIN_SAMPLES_TO_SPLIT)
+        _decision_regression_tree = DecisionTreeRegressor(min_samples_split=MIN_SAMPLES_TO_SPLIT, max_depth=MAX_DEPTH)
         _decision_regression_tree.fit(pd.get_dummies(_x_train, prefix='dummy'), _y_train)
         print('Training time:', time.time() - _start_time)
 
