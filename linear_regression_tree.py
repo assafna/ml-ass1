@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_squared_error
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import KFold
 from sklearn.tree import DecisionTreeRegressor
 from tqdm import tqdm
 
@@ -220,31 +220,54 @@ def main():
     for _data_file in os.listdir('data'):
         print('Data:', _data_file)
         _x, _y = read_and_process_data(os.path.join('data', _data_file))
-        _x_train, _x_test, _y_train, _y_test = train_test_split(_x, _y, test_size=0.2)
 
-        print('Our model:')
-        _start_time = time.time()
-        _linear_regression_tree = LinearRegressionTree()
-        _linear_regression_tree.fit(_x_train, _y_train)
-        print('Training time:', time.time() - _start_time)
+        # time, train set, test set
+        _averages = [[0, 0, 0], [0, 0, 0]]
+        _k_fold = KFold(n_splits=10)
+        for _train_index, _test_index in _k_fold.split(_x):
+            print('Train:', _train_index, 'Test:', _test_index)
+            _x_train, _x_test = _x[_train_index], _x[_test_index]
+            _y_train, _y_test = _y[_train_index], _y[_test_index]
 
-        _y_train_predict = _linear_regression_tree.predict(_x_train)
-        print('Train set MSE:', mean_squared_error(_y_train, _y_train_predict))
-        _y_test_predict = _linear_regression_tree.predict(_x_test)
-        print('Test set MSE:', mean_squared_error(_y_test, _y_test_predict))
+            # our model
+            _start_time = time.time()
+            _linear_regression_tree = LinearRegressionTree()
+            _linear_regression_tree.fit(_x_train, _y_train)
+            _averages[0][0] += time.time() - _start_time
+
+            _y_train_predict = _linear_regression_tree.predict(_x_train)
+            _averages[0][1] += mean_squared_error(_y_train, _y_train_predict)
+
+            _y_test_predict = _linear_regression_tree.predict(_x_test)
+            _averages[0][2] += mean_squared_error(_y_test, _y_test_predict)
+
+            # scikit-learn model
+            _start_time = time.time()
+            _decision_regression_tree = \
+                DecisionTreeRegressor(min_samples_split=MIN_SAMPLES_TO_SPLIT, max_depth=MAX_DEPTH)
+            _decision_regression_tree.fit(pd.get_dummies(_x_train, prefix='dummy'), _y_train)
+            _averages[1][0] += time.time() - _start_time
+
+            _y_train_predict = _decision_regression_tree.predict(pd.get_dummies(_x_train, prefix='dummy'))
+            _averages[1][1] += mean_squared_error(_y_train, _y_train_predict)
+
+            _x_train_columns = list(pd.get_dummies(_x_train, prefix='dummy').columns)
+            _x_test_new = pd.DataFrame(data=pd.get_dummies(_x_test, prefix='dummy'), columns=_x_train_columns).fillna(0)
+            _y_test_predict = _decision_regression_tree.predict(_x_test_new)
+            _averages[1][2] += mean_squared_error(_y_test, _y_test_predict)
+
+        print('Our model')
+        print('Time:', np.mean(_averages[0][0]))
+        print('Train set MSE:', np.mean(_averages[0][1]))
+        print('Test set MSE:', np.mean(_averages[0][2]))
 
         print('scikit-learn model:')
-        _start_time = time.time()
-        _decision_regression_tree = DecisionTreeRegressor(min_samples_split=MIN_SAMPLES_TO_SPLIT, max_depth=MAX_DEPTH)
-        _decision_regression_tree.fit(pd.get_dummies(_x_train, prefix='dummy'), _y_train)
-        print('Training time:', time.time() - _start_time)
+        print('Time:', np.mean(_averages[1][0]))
+        print('Train set MSE:', np.mean(_averages[1][1]))
+        print('Test set MSE:', np.mean(_averages[1][2]))
 
-        _y_train_predict = _decision_regression_tree.predict(pd.get_dummies(_x_train, prefix='dummy'))
-        print('Train set MSE:', mean_squared_error(_y_train, _y_train_predict))
-        _x_train_columns = list(pd.get_dummies(_x_train, prefix='dummy').columns)
-        _x_test_new = pd.DataFrame(data=pd.get_dummies(_x_test, prefix='dummy'), columns=_x_train_columns).fillna(0)
-        _y_test_predict = _decision_regression_tree.predict(_x_test_new)
-        print('Test set MSE:', mean_squared_error(_y_test, _y_test_predict))
+        print('Train set difference:', np.mean(_averages[0][1]) - np.mean(_averages[1][1]))
+        print('Test set difference:', np.mean(_averages[0][2]) - np.mean(_averages[1][2]))
 
 
 if __name__ == '__main__':
