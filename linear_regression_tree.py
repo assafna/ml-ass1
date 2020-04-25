@@ -11,6 +11,7 @@ from tqdm import tqdm
 
 MIN_SAMPLES_TO_SPLIT = 10
 MAX_DEPTH = 5
+K_FOLD_SPLITS = 10
 
 
 def read_and_process_data(_file):
@@ -223,7 +224,7 @@ def main():
 
         # time, train set, test set
         _averages = [[0, 0, 0], [0, 0, 0]]
-        _k_fold = KFold(n_splits=10)
+        _k_fold = KFold(n_splits=K_FOLD_SPLITS)
         for _k_fold_index, (_train_index, _test_index) in enumerate(_k_fold.split(_x)):
             print('K Fold:', _k_fold_index)
             _x_train, _x_test = _x.iloc[_train_index], _x.iloc[_test_index]
@@ -257,17 +258,17 @@ def main():
             _averages[1][2] += mean_squared_error(_y_test, _y_test_predict)
 
         print('Our model')
-        print('Time:', np.mean(_averages[0][0]))
-        print('Train set MSE:', np.mean(_averages[0][1]))
-        print('Test set MSE:', np.mean(_averages[0][2]))
+        print('Time:', _averages[0][0] / K_FOLD_SPLITS)
+        print('Train set MSE:', _averages[0][1] / K_FOLD_SPLITS)
+        print('Test set MSE:', _averages[0][2] / K_FOLD_SPLITS)
 
         print('scikit-learn model:')
-        print('Time:', np.mean(_averages[1][0]))
-        print('Train set MSE:', np.mean(_averages[1][1]))
-        print('Test set MSE:', np.mean(_averages[1][2]))
+        print('Time:', _averages[1][0] / 10)
+        print('Train set MSE:', _averages[1][1] / K_FOLD_SPLITS)
+        print('Test set MSE:', _averages[1][2] / K_FOLD_SPLITS)
 
-        print('Train set difference:', np.mean(_averages[0][1]) - np.mean(_averages[1][1]))
-        print('Test set difference:', np.mean(_averages[0][2]) - np.mean(_averages[1][2]))
+        print('Train set difference:', (_averages[0][1] - _averages[1][1]) / K_FOLD_SPLITS)
+        print('Test set difference:', (_averages[0][2] - _averages[1][2]) / K_FOLD_SPLITS)
 
 
 if __name__ == '__main__':
