@@ -224,10 +224,10 @@ def main():
         # time, train set, test set
         _averages = [[0, 0, 0], [0, 0, 0]]
         _k_fold = KFold(n_splits=10)
-        for _train_index, _test_index in _k_fold.split(_x):
-            print('Train:', _train_index, 'Test:', _test_index)
-            _x_train, _x_test = _x[_train_index], _x[_test_index]
-            _y_train, _y_test = _y[_train_index], _y[_test_index]
+        for _k_fold_index, (_train_index, _test_index) in enumerate(_k_fold.split(_x)):
+            print('K Fold:', _k_fold_index)
+            _x_train, _x_test = _x.iloc[_train_index], _x.iloc[_test_index]
+            _y_train, _y_test = _y.iloc[_train_index], _y.iloc[_test_index]
 
             # our model
             _start_time = time.time()
