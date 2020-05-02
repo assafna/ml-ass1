@@ -9,9 +9,21 @@ from sklearn.model_selection import KFold
 from sklearn.tree import DecisionTreeRegressor
 from tqdm import tqdm
 
+
+def class_for_name(_module_name, _class_name):
+    # load the module, will raise ImportError if module cannot be loaded
+    _m = __import__(_module_name, globals(), locals(), _class_name)
+
+    # get the class, will raise AttributeError if class cannot be found
+    _c = getattr(_m, _class_name)
+
+    return _c
+
+
 MIN_SAMPLES_TO_SPLIT = 10
 MAX_DEPTH = 5
 K_FOLD_SPLITS = 10
+REGRESSION_MODEL = class_for_name('sklearn.linear_model', 'LinearRegression')
 
 
 def read_and_process_data(_file):
@@ -56,7 +68,7 @@ class Node:
         self.x_columns = _x_dummies.columns
 
         # compute current mse
-        self.linear_model = LinearRegression()
+        self.linear_model = REGRESSION_MODEL()
         self.linear_model.fit(_x_dummies, _y)
         self.mse = mean_squared_error(_y, self.linear_model.predict(_x_dummies))
 
@@ -89,13 +101,13 @@ class Node:
                     if _x_lower_equal.empty or _x_greater_than.empty:
                         continue
 
-                    _x_lower_equal_linear_model = LinearRegression()
+                    _x_lower_equal_linear_model = REGRESSION_MODEL()
                     _x_lower_equal_linear_model.fit(pd.get_dummies(_x_lower_equal, prefix='dummy'), _y_lower_equal)
                     _y_predict_lower_equal = \
                         _x_lower_equal_linear_model.predict(pd.get_dummies(_x_lower_equal, prefix='dummy'))
                     _x_lower_equal_mse = mean_squared_error(_y_lower_equal, _y_predict_lower_equal)
 
-                    _x_greater_than_linear_model = LinearRegression()
+                    _x_greater_than_linear_model = REGRESSION_MODEL()
                     _x_greater_than_linear_model.fit(pd.get_dummies(_x_greater_than, prefix='dummy'), _y_greater_than)
                     _y_predict_greater_than = \
                         _x_greater_than_linear_model.predict(pd.get_dummies(_x_greater_than, prefix='dummy'))
@@ -122,7 +134,7 @@ class Node:
                     if _x_equal.empty:
                         continue
 
-                    _x_equal_linear_model = LinearRegression()
+                    _x_equal_linear_model = REGRESSION_MODEL()
                     _x_equal_linear_model.fit(pd.get_dummies(_x_equal, prefix='dummy'), _y_equal)
                     _y_predict_equal = _x_equal_linear_model.predict(pd.get_dummies(_x_equal, prefix='dummy'))
                     _x_equal_mse = mean_squared_error(_y_equal, _y_predict_equal)
